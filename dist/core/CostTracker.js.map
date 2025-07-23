@@ -1,0 +1,1 @@
+{"version":3,"file":"CostTracker.js","sourceRoot":"","sources":["../../src/core/CostTracker.ts"],"names":[],"mappings":";;;AAEA,MAAa,WAAW;IACpB,YAAoB,aAA4B;QAA5B,kBAAa,GAAb,aAAa,CAAe;IAAG,CAAC;IAEpD,KAAK,CAAC,eAAe;QACjB,MAAM,KAAK,GAAG,IAAI,CAAC,aAAa,CAAC,gBAAgB,EAAE,CAAC;QACpD,mCAAmC;QACnC,OAAO,EAAE,KAAK,EAAE,KAAK,EAAE,CAAC,EAAE,CAAC;IAC/B,CAAC;CACJ;AARD,kCAQC"}
