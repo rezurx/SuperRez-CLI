@@ -48,7 +48,7 @@ export async function startSession(sessionManager: SessionManager, project?: str
                 
                 choices.push({
                     name: `${projects.length + 1}. ${chalk.gray('Other directory...')}`,
-                    value: 'other',
+                    value: 'other' as any,
                     short: 'Other'
                 });
                 
@@ -69,7 +69,7 @@ export async function startSession(sessionManager: SessionManager, project?: str
                     }]);
                     selectedProject = manualPath;
                 } else {
-                    selectedProject = selectedChoice;
+                    selectedProject = selectedChoice.path || selectedChoice;
                 }
             }
         }

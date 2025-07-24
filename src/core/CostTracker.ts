@@ -3,9 +3,10 @@ import { ConfigManager } from './ConfigManager';
 export class CostTracker {
     constructor(private configManager: ConfigManager) {}
     
-    async getCurrentUsage(): Promise<{ limit: number; spent: number } | null> {
+    async getCurrentUsage(): Promise<{ limit: number; spent: number; remaining: number } | null> {
         const limit = this.configManager.getMonthlyBudget();
-        // For now, return placeholder data
-        return { limit, spent: 0 };
+        const spent = 0; // For now, return placeholder data
+        const remaining = limit - spent;
+        return { limit, spent, remaining };
     }
 }

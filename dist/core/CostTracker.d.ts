@@ -5,5 +5,6 @@ export declare class CostTracker {
     getCurrentUsage(): Promise<{
         limit: number;
         spent: number;
+        remaining: number;
     } | null>;
 }

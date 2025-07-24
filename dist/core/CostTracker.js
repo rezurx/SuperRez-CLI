@@ -7,8 +7,9 @@ class CostTracker {
     }
     async getCurrentUsage() {
         const limit = this.configManager.getMonthlyBudget();
-        // For now, return placeholder data
-        return { limit, spent: 0 };
+        const spent = 0; // For now, return placeholder data
+        const remaining = limit - spent;
+        return { limit, spent, remaining };
     }
 }
 exports.CostTracker = CostTracker;
