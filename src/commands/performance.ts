@@ -5,20 +5,20 @@ import { SessionManager } from '../core/SessionManager';
 
 export async function analyzePerformance(performanceAnalyzer: PerformanceAnalyzer, sessionManager: SessionManager): Promise<void> {
     const activeSession = sessionManager.getActiveSession();
-    const projectPath = activeSession?.projectPath || process.cwd();
     
     const spinner = ora('Running performance analysis...').start();
     
     try {
-        // For now, just a placeholder - we'll implement the full analyzer later
+        const projectPath = activeSession?.projectPath || process.cwd();
+        const results = await performanceAnalyzer.analyze(projectPath);
+        
         spinner.succeed('Performance analysis completed');
         
-        console.log(chalk.cyan('\n🚀 Performance Analysis Results'));
-        console.log(chalk.gray('================================='));
-        console.log(chalk.green('✓ Analysis engine ready'));
-        console.log(chalk.gray('  Full implementation coming in next iteration'));
+        // Display formatted results
+        console.log('\n' + performanceAnalyzer.formatResults(results));
         
-        console.log(chalk.green('\n💰 Cost: FREE (local analysis)'));
+        console.log(chalk.green('💰 Cost Savings:'));
+        console.log(chalk.white('   Performance Analysis: FREE (SuperRez local engine)'));
         console.log(chalk.gray('   Cloud equivalent: ~$3-10 per scan'));
         
     } catch (error) {

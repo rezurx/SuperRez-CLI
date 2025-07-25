@@ -1,7 +1,7 @@
 {
   "name": "superrez-cli",
-  "version": "1.0.0",
-  "description": "Cost-aware AI development assistant CLI - Superior alternative to Claude Code CLI",
+  "version": "2.0.0",
+  "description": "Enterprise-grade AI development assistant CLI with 95% cost reduction - Superior alternative to Claude Code CLI with advanced analysis and code generation",
   "main": "dist/index.js",
   "bin": {
     "superrez": "dist/index.js"
@@ -20,13 +20,18 @@
     "gemini",
     "cost-optimization",
     "security",
-    "performance", 
+    "performance",
     "analysis",
+    "templates",
+    "code-generation",
     "multi-ai",
     "local-first",
     "budget",
     "productivity",
-    "development"
+    "development",
+    "enterprise",
+    "interactive",
+    "repl"
   ],
   "author": "SuperRez",
   "license": "MIT",

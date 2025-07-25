@@ -9,11 +9,13 @@ import { PerformanceAnalyzer } from './core/PerformanceAnalyzer';
 import { AIOrchestrator } from './core/AIOrchestrator';
 import { CostTracker } from './core/CostTracker';
 import { ConfigManager } from './core/ConfigManager';
+import { TemplateEngine } from './core/TemplateEngine';
 import { startInteractiveMode } from './commands/interactive';
 import { startSession, endSession, showStatus, discoverProjects } from './commands/session';
 import { analyzeSecurity } from './commands/security';
 import { analyzePerformance } from './commands/performance';
 import { showAITools, generatePrompt, routeTask } from './commands/ai';
+import { listTemplates, generateFromTemplate, showTemplateInfo, manageTemplates } from './commands/template';
 
 const program = new Command();
 
@@ -24,6 +26,7 @@ let performanceAnalyzer: PerformanceAnalyzer;
 let aiOrchestrator: AIOrchestrator;
 let costTracker: CostTracker;
 let configManager: ConfigManager;
+let templateEngine: TemplateEngine;
 
 async function initializeCore() {
     try {
@@ -35,6 +38,7 @@ async function initializeCore() {
         performanceAnalyzer = new PerformanceAnalyzer();
         aiOrchestrator = new AIOrchestrator();
         costTracker = new CostTracker(configManager);
+        templateEngine = new TemplateEngine(sessionManager, aiOrchestrator);
         
         console.log(chalk.gray('✓ SuperRez CLI initialized'));
     } catch (error) {
@@ -46,7 +50,7 @@ async function initializeCore() {
 // CLI Configuration
 program
     .name('superrez')
-    .description('Cost-aware AI development assistant - Superior alternative to Claude Code CLI')
+    .description('Enterprise-grade AI development assistant with 95% cost reduction - Advanced analysis, templates, and AI integration')
     .version(version)
     .option('-v, --verbose', 'Enable verbose output')
     .option('--no-color', 'Disable colored output')
@@ -88,10 +92,10 @@ program
 // Local Analysis Commands (FREE)
 program
     .command('analyze')
-    .description('Run local analysis')
-    .option('-s, --security', 'Run security analysis')
-    .option('-p, --performance', 'Run performance analysis')
-    .option('-a, --all', 'Run all analyses')
+    .description('Run comprehensive local analysis (5+ security categories, 6+ performance categories)')
+    .option('-s, --security', 'Run security vulnerability scan (5+ categories)')
+    .option('-p, --performance', 'Run performance analysis (6+ categories)')
+    .option('-a, --all', 'Run all analysis engines')
     .action(async (options) => {
         if (options.all || options.security) {
             await analyzeSecurity(securityScanner, sessionManager);
@@ -107,10 +111,11 @@ program
 // AI Orchestration Commands
 program
     .command('ai')
-    .description('AI tool management and routing')
+    .description('AI tool management, routing, and direct execution')
     .option('-t, --tools', 'Show available AI tools')
     .option('-r, --route <task>', 'Get AI tool recommendation for task')
     .option('-p, --prompt <request>', 'Generate smart prompt for request')
+    .option('-e, --execute <request>', 'Execute AI request directly with cost tracking')
     .action(async (options) => {
         if (options.tools) {
             await showAITools(aiOrchestrator);
@@ -121,8 +126,12 @@ program
         if (options.prompt) {
             await generatePrompt(sessionManager, aiOrchestrator, costTracker, options.prompt);
         }
-        if (!options.tools && !options.route && !options.prompt) {
-            console.log(chalk.yellow('Please specify AI operation: --tools, --route <task>, or --prompt <request>'));
+        if (options.execute) {
+            const { executeAIRequest } = await import('./commands/ai');
+            await executeAIRequest(sessionManager, aiOrchestrator, costTracker, options.execute);
+        }
+        if (!options.tools && !options.route && !options.prompt && !options.execute) {
+            console.log(chalk.yellow('Please specify AI operation: --tools, --route <task>, --prompt <request>, or --execute <request>'));
         }
     });
 
@@ -152,11 +161,33 @@ program
         }
     });
 
+// Template Engine Commands
+program
+    .command('template')
+    .description('Intelligent code generation with 8+ built-in templates')
+    .option('-l, --list', 'List all available templates (React, Vue, Express, FastAPI, Go, Python, Jest, Docker)')
+    .option('-g, --generate <name>', 'Generate code from template with interactive configuration')
+    .option('-i, --info <name>', 'Show detailed template information and variables')
+    .option('-m, --manage', 'Interactive template management interface')
+    .action(async (options) => {
+        if (options.list) {
+            await listTemplates(templateEngine);
+        } else if (options.generate) {
+            await generateFromTemplate(templateEngine, sessionManager, options.generate);
+        } else if (options.info) {
+            await showTemplateInfo(templateEngine, options.info);
+        } else if (options.manage) {
+            await manageTemplates(templateEngine);
+        } else {
+            await manageTemplates(templateEngine);
+        }
+    });
+
 // Interactive Mode (Default)
 program
     .command('interactive', { isDefault: false })
     .alias('i')
-    .description('Start interactive REPL mode')
+    .description('Start interactive REPL mode with tab completion and rich terminal UI')
     .action(async () => {
         await startInteractiveMode({
             sessionManager,
@@ -164,7 +195,8 @@ program
             performanceAnalyzer,
             aiOrchestrator,
             costTracker,
-            configManager
+            configManager,
+            templateEngine
         });
     });
 

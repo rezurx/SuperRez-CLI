@@ -1,5 +1,38 @@
 #!/usr/bin/env node
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -13,11 +46,13 @@ const PerformanceAnalyzer_1 = require("./core/PerformanceAnalyzer");
 const AIOrchestrator_1 = require("./core/AIOrchestrator");
 const CostTracker_1 = require("./core/CostTracker");
 const ConfigManager_1 = require("./core/ConfigManager");
+const TemplateEngine_1 = require("./core/TemplateEngine");
 const interactive_1 = require("./commands/interactive");
 const session_1 = require("./commands/session");
 const security_1 = require("./commands/security");
 const performance_1 = require("./commands/performance");
 const ai_1 = require("./commands/ai");
+const template_1 = require("./commands/template");
 const program = new commander_1.Command();
 // Global instances
 let sessionManager;
@@ -26,6 +61,7 @@ let performanceAnalyzer;
 let aiOrchestrator;
 let costTracker;
 let configManager;
+let templateEngine;
 async function initializeCore() {
     try {
         configManager = new ConfigManager_1.ConfigManager();
@@ -35,6 +71,7 @@ async function initializeCore() {
         performanceAnalyzer = new PerformanceAnalyzer_1.PerformanceAnalyzer();
         aiOrchestrator = new AIOrchestrator_1.AIOrchestrator();
         costTracker = new CostTracker_1.CostTracker(configManager);
+        templateEngine = new TemplateEngine_1.TemplateEngine(sessionManager, aiOrchestrator);
         console.log(chalk_1.default.gray('✓ SuperRez CLI initialized'));
     }
     catch (error) {
@@ -45,7 +82,7 @@ async function initializeCore() {
 // CLI Configuration
 program
     .name('superrez')
-    .description('Cost-aware AI development assistant - Superior alternative to Claude Code CLI')
+    .description('Enterprise-grade AI development assistant with 95% cost reduction - Advanced analysis, templates, and AI integration')
     .version(package_json_1.version)
     .option('-v, --verbose', 'Enable verbose output')
     .option('--no-color', 'Disable colored output')
@@ -82,10 +119,10 @@ program
 // Local Analysis Commands (FREE)
 program
     .command('analyze')
-    .description('Run local analysis')
-    .option('-s, --security', 'Run security analysis')
-    .option('-p, --performance', 'Run performance analysis')
-    .option('-a, --all', 'Run all analyses')
+    .description('Run comprehensive local analysis (5+ security categories, 6+ performance categories)')
+    .option('-s, --security', 'Run security vulnerability scan (5+ categories)')
+    .option('-p, --performance', 'Run performance analysis (6+ categories)')
+    .option('-a, --all', 'Run all analysis engines')
     .action(async (options) => {
     if (options.all || options.security) {
         await (0, security_1.analyzeSecurity)(securityScanner, sessionManager);
@@ -100,10 +137,11 @@ program
 // AI Orchestration Commands
 program
     .command('ai')
-    .description('AI tool management and routing')
+    .description('AI tool management, routing, and direct execution')
     .option('-t, --tools', 'Show available AI tools')
     .option('-r, --route <task>', 'Get AI tool recommendation for task')
     .option('-p, --prompt <request>', 'Generate smart prompt for request')
+    .option('-e, --execute <request>', 'Execute AI request directly with cost tracking')
     .action(async (options) => {
     if (options.tools) {
         await (0, ai_1.showAITools)(aiOrchestrator);
@@ -114,8 +152,12 @@ program
     if (options.prompt) {
         await (0, ai_1.generatePrompt)(sessionManager, aiOrchestrator, costTracker, options.prompt);
     }
-    if (!options.tools && !options.route && !options.prompt) {
-        console.log(chalk_1.default.yellow('Please specify AI operation: --tools, --route <task>, or --prompt <request>'));
+    if (options.execute) {
+        const { executeAIRequest } = await Promise.resolve().then(() => __importStar(require('./commands/ai')));
+        await executeAIRequest(sessionManager, aiOrchestrator, costTracker, options.execute);
+    }
+    if (!options.tools && !options.route && !options.prompt && !options.execute) {
+        console.log(chalk_1.default.yellow('Please specify AI operation: --tools, --route <task>, --prompt <request>, or --execute <request>'));
     }
 });
 // Configuration Commands
@@ -143,11 +185,36 @@ program
         });
     }
 });
+// Template Engine Commands
+program
+    .command('template')
+    .description('Intelligent code generation with 8+ built-in templates')
+    .option('-l, --list', 'List all available templates (React, Vue, Express, FastAPI, Go, Python, Jest, Docker)')
+    .option('-g, --generate <name>', 'Generate code from template with interactive configuration')
+    .option('-i, --info <name>', 'Show detailed template information and variables')
+    .option('-m, --manage', 'Interactive template management interface')
+    .action(async (options) => {
+    if (options.list) {
+        await (0, template_1.listTemplates)(templateEngine);
+    }
+    else if (options.generate) {
+        await (0, template_1.generateFromTemplate)(templateEngine, sessionManager, options.generate);
+    }
+    else if (options.info) {
+        await (0, template_1.showTemplateInfo)(templateEngine, options.info);
+    }
+    else if (options.manage) {
+        await (0, template_1.manageTemplates)(templateEngine);
+    }
+    else {
+        await (0, template_1.manageTemplates)(templateEngine);
+    }
+});
 // Interactive Mode (Default)
 program
     .command('interactive', { isDefault: false })
     .alias('i')
-    .description('Start interactive REPL mode')
+    .description('Start interactive REPL mode with tab completion and rich terminal UI')
     .action(async () => {
     await (0, interactive_1.startInteractiveMode)({
         sessionManager,
@@ -155,7 +222,8 @@ program
         performanceAnalyzer,
         aiOrchestrator,
         costTracker,
-        configManager
+        configManager,
+        templateEngine
     });
 });
 // Default action - show help or interactive mode

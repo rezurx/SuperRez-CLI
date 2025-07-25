@@ -8,16 +8,15 @@ const chalk_1 = __importDefault(require("chalk"));
 const ora_1 = __importDefault(require("ora"));
 async function analyzePerformance(performanceAnalyzer, sessionManager) {
     const activeSession = sessionManager.getActiveSession();
-    const projectPath = activeSession?.projectPath || process.cwd();
     const spinner = (0, ora_1.default)('Running performance analysis...').start();
     try {
-        // For now, just a placeholder - we'll implement the full analyzer later
+        const projectPath = activeSession?.projectPath || process.cwd();
+        const results = await performanceAnalyzer.analyze(projectPath);
         spinner.succeed('Performance analysis completed');
-        console.log(chalk_1.default.cyan('\n🚀 Performance Analysis Results'));
-        console.log(chalk_1.default.gray('================================='));
-        console.log(chalk_1.default.green('✓ Analysis engine ready'));
-        console.log(chalk_1.default.gray('  Full implementation coming in next iteration'));
-        console.log(chalk_1.default.green('\n💰 Cost: FREE (local analysis)'));
+        // Display formatted results
+        console.log('\n' + performanceAnalyzer.formatResults(results));
+        console.log(chalk_1.default.green('💰 Cost Savings:'));
+        console.log(chalk_1.default.white('   Performance Analysis: FREE (SuperRez local engine)'));
         console.log(chalk_1.default.gray('   Cloud equivalent: ~$3-10 per scan'));
     }
     catch (error) {

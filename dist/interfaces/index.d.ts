@@ -55,6 +55,22 @@ export interface TaskRoute {
     estimatedCost: number;
     reasoning: string;
 }
+export interface Template {
+    name: string;
+    description: string;
+    category: 'component' | 'api' | 'utility' | 'test' | 'config';
+    language: string;
+    framework?: string;
+    template: string;
+    variables: TemplateVariable[];
+}
+export interface TemplateVariable {
+    name: string;
+    type: 'string' | 'boolean' | 'array' | 'object';
+    description: string;
+    required: boolean;
+    defaultValue?: any;
+}
 export interface SmartPrompt {
     prompt: string;
     context: string;
@@ -69,4 +85,5 @@ export interface CLIContext {
     aiOrchestrator: any;
     costTracker: any;
     configManager: any;
+    templateEngine: any;
 }

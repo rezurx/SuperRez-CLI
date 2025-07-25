@@ -44,12 +44,17 @@ const session_1 = require("./session");
 const security_1 = require("./security");
 const performance_1 = require("./performance");
 const ai_1 = require("./ai");
+const template_1 = require("./template");
+// Rate limiting for AI commands to prevent 529 errors
+let lastAICommandTime = 0;
+const AI_COMMAND_COOLDOWN = 2000; // 2 seconds between AI commands
 function getCompletions(line, context) {
     const commands = [
-        'start', 'end', 'status', 'discover', 'analyze', 'ai', 'clear', 'help', 'exit', 'quit'
+        'start', 'end', 'status', 'discover', 'analyze', 'ai', 'template', 'clear', 'help', 'exit', 'quit'
     ];
     const analyzeSubs = ['security', 'performance', 'all'];
     const aiSubs = ['tools', 'route', 'prompt'];
+    const templateSubs = ['list', 'generate', 'info'];
     const words = line.split(' ');
     const lastWord = words[words.length - 1];
     let completions = [];
@@ -143,11 +148,17 @@ function displayWelcome() {
     console.log(chalk_1.default.white('  ai tools            ') + chalk_1.default.gray('# Show available AI tools'));
     console.log(chalk_1.default.white('  ai route <task>     ') + chalk_1.default.gray('# Get AI tool recommendation'));
     console.log(chalk_1.default.white('  ai prompt <request> ') + chalk_1.default.gray('# Generate smart prompt'));
+    console.log(chalk_1.default.white('  ai execute <request>') + chalk_1.default.gray('# Execute AI request directly'));
+    console.log(chalk_1.default.white('  template list       ') + chalk_1.default.gray('# List available templates'));
+    console.log(chalk_1.default.white('  template generate   ') + chalk_1.default.gray('# Generate code from template'));
+    console.log(chalk_1.default.white('  template info <name>') + chalk_1.default.gray('# Show template information'));
     console.log(chalk_1.default.white('  clear               ') + chalk_1.default.gray('# Clear screen'));
     console.log(chalk_1.default.white('  help                ') + chalk_1.default.gray('# Show this help'));
     console.log(chalk_1.default.white('  exit                ') + chalk_1.default.gray('# Exit interactive mode'));
     console.log();
-    console.log(chalk_1.default.gray('💡 Tip: Most operations are FREE through local analysis!'));
+    console.log(chalk_1.default.gray('💡 Tips:'));
+    console.log(chalk_1.default.gray('   • Most operations are FREE through local analysis!'));
+    console.log(chalk_1.default.gray('   • AI commands have 2s cooldown to prevent rate limiting'));
 }
 async function displaySessionStatus(context) {
     const spinner = (0, ora_1.default)('Loading session status...').start();
@@ -199,6 +210,9 @@ async function executeCommand(cmd, args, context) {
                 break;
             case 'ai':
                 await handleAI(args, context, spinner);
+                break;
+            case 'template':
+                await handleTemplate(args, context, spinner);
                 break;
             case 'clear':
                 console.clear();
@@ -288,43 +302,116 @@ async function handleAnalyze(args, context, spinner) {
             console.log(chalk_1.default.gray('   Available types: security, performance, all'));
     }
 }
-async function handleAI(args, context, spinner) {
+async function handleTemplate(args, context, spinner) {
     if (args.length === 0) {
-        console.log(chalk_1.default.red('❌ AI command requires a subcommand'));
-        console.log(chalk_1.default.gray('   Available: tools, route <task>, prompt <request>'));
+        console.log(chalk_1.default.red('❌ Template command requires a subcommand'));
+        console.log(chalk_1.default.gray('   Available: list, generate [name], info <name>'));
         return;
     }
     const subcommand = args[0];
     const subArgs = args.slice(1);
-    switch (subcommand.toLowerCase()) {
-        case 'tools':
-            spinner.start('Loading AI tools...');
-            await (0, ai_1.showAITools)(context.aiOrchestrator);
-            spinner.stop();
-            break;
-        case 'route':
-            if (subArgs.length === 0) {
-                console.log(chalk_1.default.red('❌ "ai route" requires a task description'));
-                return;
-            }
-            const task = subArgs.join(' ');
-            spinner.start('Finding optimal AI tool...');
-            await (0, ai_1.routeTask)(context.aiOrchestrator, context.costTracker, task);
-            spinner.stop();
-            break;
-        case 'prompt':
-            if (subArgs.length === 0) {
-                console.log(chalk_1.default.red('❌ "ai prompt" requires a request description'));
-                return;
-            }
-            const request = subArgs.join(' ');
-            spinner.start('Generating smart prompt...');
-            await (0, ai_1.generatePrompt)(context.sessionManager, context.aiOrchestrator, context.costTracker, request);
-            spinner.stop();
-            break;
-        default:
-            console.log(chalk_1.default.red(`❌ Unknown AI subcommand: ${subcommand}`));
-            console.log(chalk_1.default.gray('   Available: tools, route <task>, prompt <request>'));
+    try {
+        switch (subcommand.toLowerCase()) {
+            case 'list':
+                spinner.start('Loading templates...');
+                await (0, template_1.listTemplates)(context.templateEngine);
+                spinner.stop();
+                break;
+            case 'generate':
+                const templateName = subArgs[0];
+                spinner.start('Generating from template...');
+                await (0, template_1.generateFromTemplate)(context.templateEngine, context.sessionManager, templateName);
+                spinner.stop();
+                break;
+            case 'info':
+                if (subArgs.length === 0) {
+                    console.log(chalk_1.default.red('❌ "template info" requires a template name'));
+                    return;
+                }
+                const infoTemplateName = subArgs[0];
+                await (0, template_1.showTemplateInfo)(context.templateEngine, infoTemplateName);
+                break;
+            default:
+                console.log(chalk_1.default.red(`❌ Unknown template subcommand: ${subcommand}`));
+                console.log(chalk_1.default.gray('   Available: list, generate [name], info <name>'));
+        }
+    }
+    catch (error) {
+        spinner.fail(`Template command failed`);
+        console.error(chalk_1.default.red('Error:'), error.message || error);
+    }
+}
+async function handleAI(args, context, spinner) {
+    // Check rate limiting to prevent rapid AI command calls
+    const now = Date.now();
+    if (now - lastAICommandTime < AI_COMMAND_COOLDOWN) {
+        const remaining = Math.ceil((AI_COMMAND_COOLDOWN - (now - lastAICommandTime)) / 1000);
+        console.log(chalk_1.default.yellow(`⚠️  Please wait ${remaining}s before running another AI command`));
+        console.log(chalk_1.default.gray('   This prevents rate limiting and 529 errors'));
+        return;
+    }
+    lastAICommandTime = now;
+    if (args.length === 0) {
+        console.log(chalk_1.default.red('❌ AI command requires a subcommand'));
+        console.log(chalk_1.default.gray('   Available: tools, route <task>, prompt <request>, execute <request>'));
+        return;
+    }
+    const subcommand = args[0];
+    const subArgs = args.slice(1);
+    try {
+        switch (subcommand.toLowerCase()) {
+            case 'tools':
+                spinner.start('Loading AI tools...');
+                await (0, ai_1.showAITools)(context.aiOrchestrator);
+                spinner.stop();
+                break;
+            case 'route':
+                if (subArgs.length === 0) {
+                    console.log(chalk_1.default.red('❌ "ai route" requires a task description'));
+                    return;
+                }
+                const task = subArgs.join(' ');
+                spinner.start('Finding optimal AI tool...');
+                await (0, ai_1.routeTask)(context.aiOrchestrator, context.costTracker, task);
+                spinner.stop();
+                break;
+            case 'prompt':
+                if (subArgs.length === 0) {
+                    console.log(chalk_1.default.red('❌ "ai prompt" requires a request description'));
+                    return;
+                }
+                const request = subArgs.join(' ');
+                spinner.start('Generating smart prompt...');
+                await (0, ai_1.generatePrompt)(context.sessionManager, context.aiOrchestrator, context.costTracker, request);
+                spinner.stop();
+                break;
+            case 'execute':
+            case 'exec':
+                if (subArgs.length === 0) {
+                    console.log(chalk_1.default.red('❌ "ai execute" requires a request description'));
+                    return;
+                }
+                const execRequest = subArgs.join(' ');
+                await (0, ai_1.executeAIRequest)(context.sessionManager, context.aiOrchestrator, context.costTracker, execRequest);
+                break;
+            default:
+                console.log(chalk_1.default.red(`❌ Unknown AI subcommand: ${subcommand}`));
+                console.log(chalk_1.default.gray('   Available: tools, route <task>, prompt <request>, execute <request>'));
+        }
+    }
+    catch (error) {
+        spinner.fail(`AI command failed`);
+        // Check for rate limiting errors
+        if (error.message && (error.message.includes('529') ||
+            error.message.includes('429') ||
+            error.message.toLowerCase().includes('rate limit') ||
+            error.message.toLowerCase().includes('too many requests'))) {
+            console.log(chalk_1.default.yellow('⚠️  Rate limit detected. AI tool detection will retry in 30 seconds.'));
+            console.log(chalk_1.default.gray('   Tip: Use "analyze" commands for FREE local analysis instead'));
+        }
+        else {
+            console.error(chalk_1.default.red('Error:'), error.message || error);
+        }
     }
 }
 //# sourceMappingURL=interactive.js.map
