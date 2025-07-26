@@ -1,7 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-import { ConfigManager } from './ConfigManager';
 
 export interface CostEntry {
   timestamp: Date;
@@ -21,10 +20,8 @@ export interface BudgetConfig {
 export class CostTracker {
   private configPath: string;
   private budget: BudgetConfig;
-  private configManager: ConfigManager;
 
-  constructor(configManager: ConfigManager) {
-    this.configManager = configManager;
+  constructor() {
     this.configPath = path.join(os.homedir(), '.superrez', 'budget.json');
     this.budget = this.getDefaultBudget();
     this.loadBudget();
@@ -64,18 +61,6 @@ export class CostTracker {
     this.budget.totalSpent += amount;
     
     await this.saveBudget();
-  }
-
-  async getCurrentUsage(): Promise<{ limit: number; spent: number; remaining: number }> {
-    await this.resetIfNewMonth();
-    const limit = this.budget.monthlyBudget;
-    const spent = this.budget.totalSpent;
-    const remaining = Math.max(0, limit - spent);
-    return { limit, spent, remaining };
-  }
-
-  async addUsage(cost: number, description: string): Promise<void> {
-    await this.recordCost(cost, description, 'unknown');
   }
 
   getRemainingBudget(): number {
@@ -235,19 +220,5 @@ export class CostTracker {
   shouldBlockBudget(): boolean {
     const percentage = (this.budget.totalSpent / this.budget.monthlyBudget) * 100;
     return percentage >= 95; // Block at 95%
-  }
-
-  async resetMonthlyUsage(): Promise<void> {
-    this.budget.totalSpent = 0;
-    this.budget.entries = [];
-    await this.saveBudget();
-  }
-
-  async getUsageHistory(): Promise<Array<{ date: Date; cost: number; description: string }>> {
-    return this.budget.entries.map(entry => ({
-      date: entry.timestamp,
-      cost: entry.amount,
-      description: entry.description
-    }));
   }
 }

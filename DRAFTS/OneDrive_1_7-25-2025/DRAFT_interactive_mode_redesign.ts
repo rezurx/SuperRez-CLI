@@ -1,19 +1,24 @@
 import readline from 'readline';
 import chalk from 'chalk';
+import { SessionManager } from '../core/SessionManager';
+import { AIOrchestrator } from '../core/AIOrchestrator';
+import { SecurityScanner } from '../core/SecurityScanner';
+import { PerformanceAnalyzer } from '../core/PerformanceAnalyzer';
+import { TemplateEngine } from '../core/TemplateEngine';
+import { CostTracker } from '../core/CostTracker';
 import path from 'path';
-import { CLIContext } from '../interfaces';
-import { analyzeSecurity } from './security';
-import { analyzePerformance } from './performance';
-import { executeAIRequest } from './ai';
-import { listTemplates, generateFromTemplate } from './template';
 
 export class InteractiveMode {
   private rl: readline.Interface;
-  private context: CLIContext;
+  private sessionManager: SessionManager;
+  private aiOrchestrator: AIOrchestrator;
+  private costTracker: CostTracker;
   private isRunning: boolean = false;
 
-  constructor(context: CLIContext) {
-    this.context = context;
+  constructor() {
+    this.sessionManager = new SessionManager();
+    this.aiOrchestrator = new AIOrchestrator();
+    this.costTracker = new CostTracker();
     
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -27,19 +32,12 @@ export class InteractiveMode {
 
   private getPrompt(): string {
     const currentDir = path.basename(process.cwd());
-    const activeSession = this.context.sessionManager?.getActiveSession();
-    
-    // Get budget info synchronously (simplified for now)
-    let budgetDisplay = '';
-    try {
-      budgetDisplay = ' [$50.00]';
-    } catch (error) {
-      budgetDisplay = ' [--]';
-    }
+    const budget = this.costTracker.getRemainingBudget();
+    const budgetColor = budget > 20 ? 'green' : budget > 5 ? 'yellow' : 'red';
     
     return chalk.cyan('SuperRez') + 
-           chalk.gray(` (${activeSession?.projectName || currentDir})`) + 
-           chalk.green(budgetDisplay) + 
+           chalk.gray(` (${currentDir})`) + 
+           chalk[budgetColor](` [$${budget.toFixed(2)}]`) + 
            chalk.white(' > ');
   }
 
@@ -54,7 +52,7 @@ export class InteractiveMode {
 
       await this.handleInput(trimmedInput);
       
-      // Update prompt with latest info
+      // Update prompt with latest budget
       this.rl.setPrompt(this.getPrompt());
       this.rl.prompt();
     });
@@ -107,6 +105,10 @@ export class InteractiveMode {
     // Auto-detect and setup session
     await this.autoSetupSession();
 
+    // Show budget status
+    const budget = this.costTracker.getRemainingBudget();
+    console.log(chalk.gray(`💰 Monthly Budget: $${budget.toFixed(2)} remaining\n`));
+
     this.rl.prompt();
   }
 
@@ -115,20 +117,8 @@ export class InteractiveMode {
     const projectName = path.basename(currentDir);
     
     // Auto-start session without user intervention
-    try {
-      await this.context.sessionManager.startSession(currentDir);
-      console.log(chalk.green(`📁 Session active: ${projectName}`));
-      
-      // Show budget status
-      const budget = await this.context.costTracker?.getCurrentUsage();
-      if (budget) {
-        const remaining = budget.limit - budget.spent;
-        const color = remaining > 20 ? 'green' : remaining > 5 ? 'yellow' : 'red';
-        console.log(chalk[color](`💰 Budget: $${budget.spent.toFixed(2)}/$${budget.limit.toFixed(2)} (${((remaining / budget.limit) * 100).toFixed(1)}% remaining)\n`));
-      }
-    } catch (error) {
-      console.log(chalk.yellow(`📂 Working in: ${projectName} (no session started)\n`));
-    }
+    await this.sessionManager.startSession(currentDir);
+    console.log(chalk.green(`📁 Session active: ${projectName}`));
   }
 
   private async handleInput(input: string): Promise<void> {
@@ -146,7 +136,7 @@ export class InteractiveMode {
         case 'exit':
         case 'quit':
         case 'q':
-          await this.context.sessionManager?.endSession();
+          await this.sessionManager.endSession();
           this.rl.close();
           break;
 
@@ -254,31 +244,34 @@ export class InteractiveMode {
   }
 
   private async showStatus(): Promise<void> {
-    const session = this.context.sessionManager?.getActiveSession();
-    const budget = await this.context.costTracker?.getCurrentUsage();
+    const session = await this.sessionManager.getCurrentSession();
+    const budget = this.costTracker.getRemainingBudget();
+    const totalSpent = this.costTracker.getTotalSpent();
     
     console.log(chalk.cyan('\n📊 SuperRez Status\n'));
     console.log(chalk.white(`📁 Project: ${session?.projectName || 'None'}`));
     console.log(chalk.white(`📍 Directory: ${process.cwd()}`));
-    
-    if (budget) {
-      console.log(chalk.white(`💰 Budget Remaining: $${(budget.limit - budget.spent).toFixed(2)}`));
-      console.log(chalk.white(`💸 Total Spent: $${budget.spent.toFixed(2)}`));
-    }
+    console.log(chalk.white(`💰 Budget Remaining: $${budget.toFixed(2)}`));
+    console.log(chalk.white(`💸 Total Spent: $${totalSpent.toFixed(2)}`));
     console.log();
   }
 
   private async runAnalysis(args: string[]): Promise<void> {
     console.log(chalk.cyan('🔍 Running Analysis...\n'));
     
+    const scanner = new SecurityScanner();
+    const analyzer = new PerformanceAnalyzer();
+    
     if (args.includes('--security') || args.length === 0) {
       console.log(chalk.blue('🔒 Security Analysis'));
-      await analyzeSecurity(this.context.securityScanner, this.context.sessionManager);
+      const securityResults = await scanner.scanDirectory(process.cwd());
+      this.displayAnalysisResults('Security', securityResults);
     }
     
     if (args.includes('--performance') || args.length === 0) {
       console.log(chalk.blue('⚡ Performance Analysis'));
-      await analyzePerformance(this.context.performanceAnalyzer, this.context.sessionManager);
+      const performanceResults = await analyzer.analyzeDirectory(process.cwd());
+      this.displayAnalysisResults('Performance', performanceResults);
     }
     
     console.log(chalk.green('✓ Analysis complete (100% FREE)\n'));
@@ -286,26 +279,36 @@ export class InteractiveMode {
 
   private async runSecurityScan(): Promise<void> {
     console.log(chalk.blue('🔒 Running Security Scan...\n'));
-    await analyzeSecurity(this.context.securityScanner, this.context.sessionManager);
+    const scanner = new SecurityScanner();
+    const results = await scanner.scanDirectory(process.cwd());
+    this.displayAnalysisResults('Security', results);
     console.log(chalk.green('✓ Security scan complete (100% FREE)\n'));
   }
 
   private async runPerformanceAnalysis(): Promise<void> {
     console.log(chalk.blue('⚡ Running Performance Analysis...\n'));
-    await analyzePerformance(this.context.performanceAnalyzer, this.context.sessionManager);
+    const analyzer = new PerformanceAnalyzer();
+    const results = await analyzer.analyzeDirectory(process.cwd());
+    this.displayAnalysisResults('Performance', results);
     console.log(chalk.green('✓ Performance analysis complete (100% FREE)\n'));
   }
 
   private async runTemplateGeneration(args: string[]): Promise<void> {
+    const templateEngine = new TemplateEngine();
+    
     if (args.length === 0) {
       console.log(chalk.cyan('📝 Available Templates:\n'));
-      await listTemplates(this.context.templateEngine);
+      const templates = await templateEngine.listTemplates();
+      templates.forEach((template, index) => {
+        console.log(chalk.white(`  ${index + 1}. ${template.name}`));
+        console.log(chalk.gray(`     ${template.description}`));
+      });
       console.log(chalk.yellow('\nUsage: template <name> or generate <name>'));
       console.log();
     } else {
       const templateName = args[0];
       console.log(chalk.cyan(`📝 Generating template: ${templateName}...\n`));
-      await generateFromTemplate(this.context.templateEngine, this.context.sessionManager, templateName);
+      await templateEngine.generateFromTemplate(templateName);
       console.log(chalk.green('✓ Template generated successfully (100% FREE)\n'));
     }
   }
@@ -316,17 +319,28 @@ export class InteractiveMode {
       return;
     }
 
+    // Check budget before making AI request
+    const canAfford = await this.costTracker.checkBudget(0.01); // Estimate
+    if (!canAfford) {
+      console.log(chalk.red('❌ Insufficient budget for AI request.'));
+      console.log(chalk.gray('Consider using FREE commands like "analyze" or "template"\n'));
+      return;
+    }
+
     console.log(chalk.cyan('🤖 Processing AI request...\n'));
     
     try {
-      await executeAIRequest(this.context.sessionManager, this.context.aiOrchestrator, this.context.costTracker, prompt);
+      // Get current context
+      const context = await this.sessionManager.getCurrentContext();
+      const fullPrompt = context ? `${context}\n\nUser request: ${prompt}` : prompt;
+      
+      const response = await this.aiOrchestrator.executePrompt(fullPrompt);
+      console.log(chalk.white(response));
+      console.log();
       
       // Update budget display
-      const budget = await this.context.costTracker?.getCurrentUsage();
-      if (budget) {
-        const remaining = budget.limit - budget.spent;
-        console.log(chalk.gray(`💰 Budget remaining: $${remaining.toFixed(2)}\n`));
-      }
+      const remaining = this.costTracker.getRemainingBudget();
+      console.log(chalk.gray(`💰 Budget remaining: $${remaining.toFixed(2)}\n`));
       
     } catch (error) {
       console.log(chalk.red('❌ Error processing AI request:'), error.message);
@@ -335,35 +349,46 @@ export class InteractiveMode {
   }
 
   private async showConfig(): Promise<void> {
-    console.log(chalk.cyan('⚙️ Configuration\n'));
-    const config = this.context.configManager?.getAll();
-    if (config) {
-      console.log(chalk.white(JSON.stringify(config, null, 2)));
-    }
-    console.log();
+    // Implementation depends on your ConfigManager
+    console.log(chalk.cyan('⚙️ Configuration (placeholder)\n'));
   }
 
   private async showBudget(): Promise<void> {
-    const budget = await this.context.costTracker?.getCurrentUsage();
+    const remaining = this.costTracker.getRemainingBudget();
+    const spent = this.costTracker.getTotalSpent();
+    const total = remaining + spent;
     
     console.log(chalk.cyan('\n💰 Budget Status\n'));
-    if (budget) {
-      const remaining = budget.limit - budget.spent;
-      console.log(chalk.white(`Total Budget: $${budget.limit.toFixed(2)}`));
-      console.log(chalk.white(`Spent: $${budget.spent.toFixed(2)}`));
-      console.log(chalk.white(`Remaining: $${remaining.toFixed(2)}`));
-      
-      const percentage = (remaining / budget.limit) * 100;
-      const color = percentage > 50 ? 'green' : percentage > 20 ? 'yellow' : 'red';
-      console.log(chalk[color](`Usage: ${(100 - percentage).toFixed(1)}%\n`));
+    console.log(chalk.white(`Total Budget: $${total.toFixed(2)}`));
+    console.log(chalk.white(`Spent: $${spent.toFixed(2)}`));
+    console.log(chalk.white(`Remaining: $${remaining.toFixed(2)}`));
+    
+    const percentage = (remaining / total) * 100;
+    const color = percentage > 50 ? 'green' : percentage > 20 ? 'yellow' : 'red';
+    console.log(chalk[color](`Usage: ${(100 - percentage).toFixed(1)}%\n`));
+  }
+
+  private displayAnalysisResults(type: string, results: any): void {
+    const count = results.issues?.length || 0;
+    if (count === 0) {
+      console.log(chalk.green(`  ✓ No ${type.toLowerCase()} issues found`));
     } else {
-      console.log(chalk.gray('Budget information not available\n'));
+      console.log(chalk.yellow(`  ⚠️  Found ${count} ${type.toLowerCase()} issue${count > 1 ? 's' : ''}`));
+      if (results.issues) {
+        results.issues.slice(0, 3).forEach((issue: any, index: number) => {
+          console.log(chalk.gray(`    ${index + 1}. ${issue.description}`));
+        });
+        if (count > 3) {
+          console.log(chalk.gray(`    ... and ${count - 3} more`));
+        }
+      }
     }
+    console.log();
   }
 }
 
 // Export function to start interactive mode
-export async function startInteractiveMode(context: CLIContext): Promise<void> {
-  const interactive = new InteractiveMode(context);
+export async function startInteractiveMode(): Promise<void> {
+  const interactive = new InteractiveMode();
   await interactive.start();
 }

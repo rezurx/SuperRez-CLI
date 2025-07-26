@@ -10,11 +10,11 @@ export interface AITool {
 }
 
 export class AIOrchestrator {
-  private costTracker?: CostTracker;
+  private costTracker: CostTracker;
   private availableTools: AITool[];
 
-  constructor(costTracker?: CostTracker) {
-    this.costTracker = costTracker;
+  constructor() {
+    this.costTracker = new CostTracker();
     this.availableTools = [
       {
         name: 'mock',
@@ -56,10 +56,10 @@ export class AIOrchestrator {
 
   async executePrompt(prompt: string, preferredTool?: string): Promise<string> {
     const tool = this.selectBestTool(prompt, preferredTool);
-    const estimatedCost = this.estimateCost(prompt, tool.name);
+    const estimatedCost = this.costTracker.estimateCost(prompt, tool.name);
 
     // Check budget before proceeding
-    if (estimatedCost > 0 && this.costTracker) {
+    if (estimatedCost > 0) {
       const canAfford = await this.costTracker.checkBudget(estimatedCost);
       if (!canAfford) {
         throw new Error('Insufficient budget for this request');
@@ -75,7 +75,7 @@ export class AIOrchestrator {
       const response = await this.callAI(prompt, tool);
       
       // Record actual cost (for now, use estimate)
-      if (estimatedCost > 0 && this.costTracker) {
+      if (estimatedCost > 0) {
         await this.costTracker.recordCost(
           estimatedCost,
           `AI request via ${tool.name}`,
@@ -352,60 +352,5 @@ export class AIOrchestrator {
     }
     
     return suggestions;
-  }
-
-  private estimateCost(prompt: string, aiTool: string = 'claude'): number {
-    const tokens = this.estimateTokens(prompt);
-    
-    const pricing = {
-      'claude': { input: 0.003, output: 0.015 }, // per 1K tokens
-      'gpt-4': { input: 0.030, output: 0.060 },
-      'gpt-3.5': { input: 0.0015, output: 0.002 },
-      'gemini': { input: 0.00025, output: 0.0005 },
-      'ollama': { input: 0, output: 0 }, // Free local
-      'mock': { input: 0, output: 0 } // Free mock responses
-    };
-
-    const tool = pricing[aiTool] || pricing['claude'];
-    const inputCost = (tokens / 1000) * tool.input;
-    const outputCost = (tokens / 1000) * tool.output; // Assume similar output length
-    
-    return inputCost + outputCost;
-  }
-
-  private estimateTokens(text: string): number {
-    // Rough estimation: ~4 characters per token
-    return Math.ceil(text.length / 4);
-  }
-
-  // Legacy methods for backward compatibility
-  async detectAvailableTools(): Promise<any[]> {
-    return this.availableTools.filter(t => t.available);
-  }
-
-  async getSummary(): Promise<string> {
-    const available = this.availableTools.filter(t => t.available);
-    const unavailable = this.availableTools.filter(t => !t.available);
-    
-    let summary = chalk.cyan.bold('🤖 AI Tools Status\n');
-    
-    if (available.length > 0) {
-      summary += chalk.green('\n✅ Available Tools:\n');
-      available.forEach(tool => {
-        const cost = tool.costPerK === 0 ? 'FREE' : `$${tool.costPerK}/1K tokens`;
-        summary += `  • ${chalk.bold(tool.name)} (${cost})\n`;
-        summary += `    ${tool.description}\n`;
-      });
-    }
-    
-    if (unavailable.length > 0) {
-      summary += chalk.yellow('\n⚠️  Unavailable Tools:\n');
-      unavailable.forEach(tool => {
-        summary += `  • ${chalk.dim(tool.name)}\n`;
-        summary += `    ${chalk.dim(tool.description)}\n`;
-      });
-    }
-
-    return summary;
   }
 }

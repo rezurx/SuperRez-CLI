@@ -1,7 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
 import chalk from 'chalk';
-import { ConfigManager } from './ConfigManager';
 
 export interface SessionData {
   projectName: string;
@@ -16,11 +15,6 @@ export interface SessionData {
 export class SessionManager {
   private currentSession: SessionData | null = null;
   private readonly sessionFile = path.join(process.cwd(), '.superrez-session.json');
-  private configManager?: ConfigManager;
-
-  constructor(configManager?: ConfigManager) {
-    this.configManager = configManager;
-  }
 
   async startSession(projectPath: string): Promise<SessionData> {
     const projectName = path.basename(projectPath);
@@ -43,10 +37,10 @@ export class SessionManager {
     return this.currentSession;
   }
 
-  getActiveSession(): SessionData | null {
+  async getCurrentSession(): Promise<SessionData | null> {
     if (!this.currentSession) {
       // Try to load from file
-      this.loadSession();
+      await this.loadSession();
     }
     return this.currentSession;
   }
@@ -205,60 +199,5 @@ export class SessionManager {
       // Ignore errors loading session
       this.currentSession = null;
     }
-  }
-
-  // Legacy methods for backward compatibility
-  async discoverProjects(): Promise<any[]> {
-    // Simple discovery based on current directory and subdirectories
-    const projects: any[] = [];
-    const currentDir = process.cwd();
-    
-    try {
-      const files = await fs.readdir(currentDir);
-      const subdirs = [];
-      
-      for (const file of files) {
-        const fullPath = path.join(currentDir, file);
-        const stat = await fs.stat(fullPath);
-        if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
-          subdirs.push(file);
-        }
-      }
-      
-      // Add current directory as a project
-      const projectType = await this.detectProjectType(currentDir);
-      projects.push({
-        name: path.basename(currentDir),
-        path: currentDir,
-        type: projectType,
-        lastModified: new Date()
-      });
-      
-      // Add subdirectories that look like projects
-      for (const subdir of subdirs.slice(0, 5)) { // Limit to 5 subdirs
-        const subdirPath = path.join(currentDir, subdir);
-        const subdirType = await this.detectProjectType(subdirPath);
-        if (subdirType !== 'Unknown') {
-          projects.push({
-            name: subdir,
-            path: subdirPath,
-            type: subdirType,
-            lastModified: new Date()
-          });
-        }
-      }
-    } catch (error) {
-      // Ignore errors
-    }
-    
-    return projects;
-  }
-
-  async getSessionContext(sessionId: string): Promise<string | null> {
-    return this.getCurrentContext();
-  }
-
-  async cleanup(): Promise<void> {
-    await this.endSession();
   }
 }
